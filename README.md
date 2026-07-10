@@ -1,6 +1,14 @@
 # HubSpot MCP Server
 
-A Model Context Protocol (MCP) server that exposes HubSpot CRM data and actions as tools for AI agents (Claude, Cursor, and any other MCP-compatible client).
+[![CI](https://github.com/djmoore-projects/hubspot-mcp-server/actions/workflows/ci.yml/badge.svg)](https://github.com/djmoore-projects/hubspot-mcp-server/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Node](https://img.shields.io/badge/node-%3E%3D18-brightgreen)](package.json)
+
+A Model Context Protocol (MCP) server that exposes HubSpot CRM data and actions as tools for AI agents (Claude, Cursor, and any other MCP-compatible client) — so an agent can look up a contact, search companies, upsert a lead, and log a call or note, all through typed, validated tool calls instead of hand-rolled API glue.
+
+Battle-tested against a live HubSpot account: contact lookup/upsert, company search, and note logging all verified end-to-end (see [Tools](#tools) for sample I/O).
+
+If you find this useful, a star helps other people building MCP integrations find it.
 
 ## Architecture
 

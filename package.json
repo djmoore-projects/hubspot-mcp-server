@@ -13,6 +13,27 @@
     "dev": "tsx src/index.ts"
   },
   "license": "MIT",
+  "author": "Derek Moore",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/djmoore-projects/hubspot-mcp-server.git"
+  },
+  "homepage": "https://github.com/djmoore-projects/hubspot-mcp-server#readme",
+  "bugs": {
+    "url": "https://github.com/djmoore-projects/hubspot-mcp-server/issues"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "hubspot",
+    "hubspot-api",
+    "crm",
+    "claude",
+    "claude-desktop",
+    "ai-agents",
+    "llm-tools",
+    "cursor"
+  ],
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.12.0",
     "axios": "^1.7.9",
