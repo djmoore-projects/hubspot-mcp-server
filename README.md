@@ -113,3 +113,7 @@ Log an engagement on a contact's timeline.
 
 - Rate limits: HubSpot returns `429` when the account's rate limit is exceeded. The client retries automatically; if retries are exhausted, the tool returns a clear error message rather than crashing.
 - All tool errors (invalid input, HubSpot API errors, network failures) are returned as MCP tool errors (`isError: true`) so the calling agent can react instead of the server process dying.
+
+## License
+
+MIT — see [LICENSE](LICENSE).
