@@ -1,124 +1,67 @@
 #!/usr/bin/env node
 import "dotenv/config";
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { z } from "zod";
-import { HubSpotApiError, HubSpotClient } from "./hubspotClient.js";
+import { ApprovalStore } from "./approvals.js";
+import { AuditLogger } from "./audit.js";
+import { createJwtVerifier } from "./auth.js";
+import { loadConfig, type AppConfig } from "./config.js";
+import { Gateway } from "./gateway.js";
+import { createHttpApp } from "./http.js";
+import { HubSpotClient } from "./hubspotClient.js";
+import { RateLimiter } from "./rateLimit.js";
+import { TOOLS } from "./tools.js";
 
-const accessToken = process.env.HUBSPOT_ACCESS_TOKEN;
-if (!accessToken) {
-  console.error(
-    "Missing HUBSPOT_ACCESS_TOKEN environment variable. Set it before starting the server."
-  );
-  process.exit(1);
-}
-
-const hubspot = new HubSpotClient(accessToken);
-
-const server = new McpServer({
-  name: "hubspot-mcp-server",
-  version: "1.0.0",
-});
-
-/** Converts any thrown error into a non-throwing MCP tool error response. */
-function toToolError(err: unknown) {
-  const message =
-    err instanceof HubSpotApiError
-      ? err.message
-      : err instanceof Error
-      ? `Unexpected error: ${err.message}`
-      : "Unexpected unknown error";
-
-  return {
-    isError: true as const,
-    content: [{ type: "text" as const, text: message }],
+/** Lazily builds one HubSpot client per tenant, each with that tenant's own private-app token. */
+function tenantClients(config: AppConfig) {
+  const cache = new Map<string, HubSpotClient>();
+  return (tenantId: string): HubSpotClient => {
+    let client = cache.get(tenantId);
+    if (!client) {
+      const token =
+        config.transport === "stdio" ? config.stdioToken : process.env[config.tenants[tenantId]?.hubspotTokenEnv ?? ""];
+      if (!token) throw new Error(`No HubSpot credential configured for tenant ${tenantId}`);
+      client = new HubSpotClient(token);
+      cache.set(tenantId, client);
+    }
+    return client;
   };
 }
-
-function toToolSuccess(data: unknown) {
-  return {
-    content: [{ type: "text" as const, text: JSON.stringify(data, null, 2) }],
-  };
-}
-
-server.tool(
-  "hubspot_get_contact",
-  "Look up a HubSpot contact by email address. Returns first name, last name, lifecycle stage, and associated company name.",
-  {
-    email: z.string().email().describe("The contact's email address to search for."),
-  },
-  async ({ email }) => {
-    try {
-      const contact = await hubspot.getContactByEmail(email);
-      if (!contact) {
-        return toToolSuccess({ found: false, message: `No contact found for email: ${email}` });
-      }
-      return toToolSuccess({ found: true, contact });
-    } catch (err) {
-      return toToolError(err);
-    }
-  }
-);
-
-server.tool(
-  "hubspot_search_companies",
-  "Search HubSpot companies by name or domain. Returns matching company names and domains.",
-  {
-    query: z.string().min(1).describe("Free-text search query, e.g. a company name or domain."),
-  },
-  async ({ query }) => {
-    try {
-      const companies = await hubspot.searchCompanies(query);
-      return toToolSuccess({ count: companies.length, companies });
-    } catch (err) {
-      return toToolError(err);
-    }
-  }
-);
-
-server.tool(
-  "hubspot_create_contact",
-  "Create a new HubSpot contact, or update an existing one if the email already exists.",
-  {
-    email: z.string().email().describe("The contact's email address (used as the unique key)."),
-    firstName: z.string().optional().describe("The contact's first name."),
-    lastName: z.string().optional().describe("The contact's last name."),
-    company: z.string().optional().describe("The contact's company name."),
-  },
-  async ({ email, firstName, lastName, company }) => {
-    try {
-      const contact = await hubspot.createOrUpdateContact({ email, firstName, lastName, company });
-      return toToolSuccess({ contact });
-    } catch (err) {
-      return toToolError(err);
-    }
-  }
-);
-
-server.tool(
-  "hubspot_log_activity",
-  "Log an engagement (note, email, or call) on a contact's HubSpot timeline.",
-  {
-    contactId: z.string().min(1).describe("The HubSpot contact ID to log the activity against."),
-    activityType: z
-      .enum(["NOTE", "EMAIL", "CALL"])
-      .describe("The type of engagement to log."),
-    body: z.string().min(1).describe("The text content/body of the activity."),
-  },
-  async ({ contactId, activityType, body }) => {
-    try {
-      const result = await hubspot.logActivity({ contactId, activityType, body });
-      return toToolSuccess({ logged: true, ...result });
-    } catch (err) {
-      return toToolError(err);
-    }
-  }
-);
 
 async function main() {
-  const transport = new StdioServerTransport();
-  await server.connect(transport);
-  console.error("HubSpot MCP server running on stdio");
+  let config: AppConfig;
+  try {
+    config = loadConfig();
+  } catch (err) {
+    console.error(`Configuration error: ${err instanceof Error ? err.message : err}`);
+    process.exit(1);
+  }
+
+  const audit = new AuditLogger(config.audit);
+  const limiter = new RateLimiter();
+  const approvals = new ApprovalStore(config.approvalTtlSeconds);
+  const gateway = new Gateway({ getClient: tenantClients(config), audit, limiter, approvals, config });
+  setInterval(() => limiter.sweep(), 60_000).unref();
+
+  if (config.transport === "stdio") {
+    // Local single-user mode: the operator's own token, all tool scopes.
+    const server = gateway.buildServer({
+      tenantId: "local",
+      subject: process.env.USER ?? "local",
+      clientId: "stdio",
+      scopes: TOOLS.map((t) => t.scope),
+    });
+    await server.connect(new StdioServerTransport());
+    console.error("HubSpot MCP server running on stdio");
+    return;
+  }
+
+  const app = createHttpApp({ config, verifier: createJwtVerifier(config.oauth), gateway, audit, limiter, approvals });
+  const httpServer = app.listen(config.port, () => {
+    console.error(`HubSpot MCP server listening on :${config.port} — MCP endpoint ${config.resourceUrl}`);
+  });
+  const shutdown = () => httpServer.close(() => process.exit(0));
+  process.on("SIGTERM", shutdown);
+  process.on("SIGINT", shutdown);
 }
 
 main().catch((err) => {

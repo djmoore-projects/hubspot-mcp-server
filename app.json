@@ -1,0 +1,11 @@
+{
+  "name": "hubspot-mcp",
+  "env": {
+    "PUBLIC_BASE_URL": { "description": "Public URL of this service (set after first deploy, then redeploy)", "required": false },
+    "OAUTH_ISSUER": { "description": "Your IdP issuer URL (Okta, Entra ID, Auth0, Keycloak)" },
+    "OAUTH_JWKS_URI": { "description": "IdP JWKS URL (leave blank for $OAUTH_ISSUER/.well-known/jwks.json)", "required": false },
+    "TENANTS_JSON": { "description": "Tenant registry, e.g. {\"acme\":{\"hubspotTokenEnv\":\"HUBSPOT_TOKEN_ACME\"}}" },
+    "HUBSPOT_TOKEN_ACME": { "description": "HubSpot private-app token for tenant acme (move to Secret Manager for production)" }
+  },
+  "options": { "allow-unauthenticated": true, "memory": "512Mi", "cpu": "1", "port": 8080 }
+}

@@ -1,7 +1,7 @@
 {
   "name": "hubspot-mcp-server",
-  "version": "1.0.0",
-  "description": "MCP server exposing HubSpot CRM data and actions as tools for AI agents (Claude, Cursor).",
+  "version": "2.0.0",
+  "description": "Production-grade remote MCP server for HubSpot CRM: OAuth 2.1, multi-tenancy, per-user scopes, human approval for writes, hash-chained audit logs, rate limiting.",
   "type": "module",
   "main": "dist/index.js",
   "bin": {
@@ -10,7 +10,11 @@
   "scripts": {
     "build": "tsc",
     "start": "node dist/index.js",
-    "dev": "tsx src/index.ts"
+    "dev": "tsx src/index.ts",
+    "test": "node --import tsx --test test/*.test.ts",
+    "dev:issuer": "tsx src/dev/issuer.ts",
+    "dev:http": "MCP_TRANSPORT=http tsx src/index.ts",
+    "audit:verify": "node dist/scripts/verifyAudit.js"
   },
   "license": "MIT",
   "author": "Derek Moore",
@@ -38,14 +42,17 @@
     "@modelcontextprotocol/sdk": "^1.12.0",
     "axios": "^1.7.9",
     "dotenv": "^16.4.7",
+    "express": "^5.2.1",
+    "jose": "^6.2.12",
     "zod": "^3.24.1"
   },
   "devDependencies": {
+    "@types/express": "^5.0.6",
     "@types/node": "^22.10.5",
     "tsx": "^4.19.2",
     "typescript": "^5.7.3"
   },
   "engines": {
-    "node": ">=18"
+    "node": ">=20"
   }
 }
