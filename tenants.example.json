@@ -1,0 +1,4 @@
+{
+  "acme": { "name": "Acme Bank", "hubspotTokenEnv": "HUBSPOT_TOKEN_ACME" },
+  "globex": { "name": "Globex Capital", "hubspotTokenEnv": "HUBSPOT_TOKEN_GLOBEX" }
+}

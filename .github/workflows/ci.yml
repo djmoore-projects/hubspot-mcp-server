@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        node-version: [18.x, 20.x, 22.x]
+        node-version: [20.x, 22.x]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -20,4 +20,20 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npx tsc --noEmit
+      - run: npm test
       - run: npm run build
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t hubspot-mcp:ci .
+      - name: Smoke test container
+        run: |
+          docker run -d --name hmcp -p 8080:8080 \
+            -e OAUTH_ISSUER=https://issuer.example.com \
+            -e TENANTS_JSON='{"acme":{"hubspotTokenEnv":"T"}}' -e T=pat-dummy \
+            hubspot-mcp:ci
+          sleep 3
+          curl -fsS localhost:8080/healthz
+          test "$(curl -s -o /dev/null -w '%{http_code}' -X POST localhost:8080/mcp)" = "401"
